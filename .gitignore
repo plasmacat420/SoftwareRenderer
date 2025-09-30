@@ -1,0 +1,18 @@
+# build artifacts
+*.exe
+*.o
+SoftwareRenderer.exe
+frame_*.ppm
+
+# SDL import artifacts (if you moved to archive and don't want these tracked)
+sdl_import/
+
+# OS/editor
+*~
+*.swp
+.DS_Store
+Thumbs.db
+
+# VS Code local DB files
+.vscode/.browse.*
+.vscode/*.log

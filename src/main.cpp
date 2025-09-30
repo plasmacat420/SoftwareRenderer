@@ -24,6 +24,86 @@ static Vec3 rotateX(const Vec3 &v, float a){
     return { v.x, c*v.y - s*v.z, s*v.y + c*v.z };
 }
 
+// --- Shape generators ---
+static void makeCube(std::vector<Vec3> &verts, std::vector<std::pair<int,int>> &edges) {
+    verts = {
+        {-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1},
+        {-1,-1, 1}, {1,-1, 1}, {1,1, 1}, {-1,1, 1}
+    };
+    edges = {
+        {0,1},{1,2},{2,3},{3,0},
+        {4,5},{5,6},{6,7},{7,4},
+        {0,4},{1,5},{2,6},{3,7}
+    };
+}
+
+static void makeTetrahedron(std::vector<Vec3> &verts, std::vector<std::pair<int,int>> &edges) {
+    verts = {
+        {0,0,1.2f}, {1,0,-0.4f}, {-0.5f,0.87f,-0.4f}, {-0.5f,-0.87f,-0.4f}
+    };
+    edges = { {0,1},{0,2},{0,3},{1,2},{2,3},{3,1} };
+}
+
+static void makeIcosahedron(std::vector<Vec3> &verts, std::vector<std::pair<int,int>> &edges) {
+    verts.clear(); edges.clear();
+    float phi = (1 + sqrtf(5.0f)) * 0.5f; // golden ratio
+    verts = {
+        {-1,  phi, 0}, {1,  phi, 0}, {-1, -phi, 0}, {1, -phi, 0},
+        {0, -1,  phi}, {0,  1,  phi}, {0, -1, -phi}, {0,  1, -phi},
+        { phi, 0, -1}, { phi, 0,  1}, {-phi, 0, -1}, {-phi, 0,  1}
+    };
+    // Normalize
+    for (auto &v: verts) {
+        float l = sqrtf(v.x*v.x + v.y*v.y + v.z*v.z);
+        v.x/=l; v.y/=l; v.z/=l;
+    }
+    // Edges (manually defined adjacency)
+    edges = {
+        {0,1},{0,5},{0,7},{0,10},{0,11},
+        {1,5},{1,7},{1,8},{1,9},
+        {2,3},{2,4},{2,6},{2,10},{2,11},
+        {3,4},{3,6},{3,8},{3,9},
+        {4,5},{4,9},{4,11},
+        {5,9},{5,11},
+        {6,7},{6,8},{6,10},
+        {7,8},{7,10},
+        {8,9},
+        {10,11}
+    };
+}
+
+static void makeHelix(std::vector<Vec3> &verts, std::vector<std::pair<int,int>> &edges, int N=200) {
+    verts.clear(); edges.clear();
+    for (int i=0; i<N; i++) {
+        float t = i * 0.15f;
+        verts.push_back({cosf(t), sinf(t), t*0.05f});
+        if (i>0) edges.push_back({i-1,i});
+    }
+}
+
+static void makeGrid(std::vector<Vec3> &verts, std::vector<std::pair<int,int>> &edges, int N=4) {
+    verts.clear(); edges.clear();
+    for (int x=0; x<N; x++) {
+        for (int y=0; y<N; y++) {
+            for (int z=0; z<N; z++) {
+                verts.push_back({(float)x-(N-1)/2.0f, (float)y-(N-1)/2.0f, (float)z-(N-1)/2.0f});
+            }
+        }
+    }
+    // connect in x, y, z directions
+    int idx=0;
+    for (int x=0; x<N; x++) {
+        for (int y=0; y<N; y++) {
+            for (int z=0; z<N; z++, idx++) {
+                if (x+1<N) edges.push_back({idx, idx+N*N});
+                if (y+1<N) edges.push_back({idx, idx+N});
+                if (z+1<N) edges.push_back({idx, idx+1});
+            }
+        }
+    }
+}
+
+
 // --- Simple PPM writer (RGB24) ---
 static bool writePPM(const char *path, int W, int H, const unsigned char *rgb) {
     FILE *f = fopen(path, "wb");
@@ -100,16 +180,12 @@ int main(int argc, char** argv) {
 
     Renderer renderer(W, H);
 
-    // Cube geometry (wireframe)
-    std::vector<Vec3> verts = {
-        {-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1},
-        {-1,-1, 1}, {1,-1, 1}, {1,1, 1}, {-1,1, 1}
-    };
-    std::vector<std::pair<int,int>> edges = {
-        {0,1},{1,2},{2,3},{3,0},
-        {4,5},{5,6},{6,7},{7,4},
-        {0,4},{1,5},{2,6},{3,7}
-    };
+    std::vector<Vec3> verts;
+    std::vector<std::pair<int,int>> edges;
+
+    int currentShape = 1; // start with cube
+    makeCube(verts, edges);
+
 
     const float cameraZ = 4.0f;
     const float fov = 90.0f;
@@ -144,11 +220,16 @@ int main(int argc, char** argv) {
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_QUIT) running = false;
             if (ev.type == SDL_KEYDOWN) {
-                auto key = ev.key.keysym.sym;
-                if (key == SDLK_ESCAPE) running = false;
-                else if (key == SDLK_SPACE) paused = !paused;
-                else if (key == SDLK_s) requestedSave = true;
+            switch (ev.key.keysym.sym) {
+                case SDLK_ESCAPE: running = false; break;
+                case SDLK_1: makeCube(verts, edges); currentShape=1; printf("Shape: Cube\n"); break;
+                case SDLK_2: makeTetrahedron(verts, edges); currentShape=2; printf("Shape: Tetrahedron\n"); break;
+                case SDLK_3: makeIcosahedron(verts, edges); currentShape=3; printf("Shape: Icosahedron\n"); break;
+                case SDLK_4: makeHelix(verts, edges); currentShape=4; printf("Shape: Helix\n"); break;
+                case SDLK_5: makeGrid(verts, edges); currentShape=5; printf("Shape: Grid\n"); break;
+                }
             }
+
         }
         if (paused) { SDL_Delay(10); continue; }
 

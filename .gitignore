@@ -4,15 +4,20 @@
 SoftwareRenderer.exe
 frame_*.ppm
 
-# SDL import artifacts (if you moved to archive and don't want these tracked)
-sdl_import/
-
-# OS/editor
+# OS/editor junk
 *~
 *.swp
 .DS_Store
 Thumbs.db
 
-# VS Code local DB files
+# VS Code
 .vscode/.browse.*
 .vscode/*.log
+
+# old SDL3 import dir
+archive/
+
+frames/
+*.gif
+*.mp4
+frame_*.ppm

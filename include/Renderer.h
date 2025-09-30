@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -7,30 +8,31 @@ public:
     Renderer(int width, int height);
     ~Renderer();
 
+    // Clear color (r,g,b) 0-255
     void clear(unsigned char r, unsigned char g, unsigned char b);
+    // Reset Z buffer
     void clearZ();
 
-    void setPixel(int x, int y, unsigned char r, unsigned char g, unsigned char b);
-    void drawLine(int x0, int y0, int x1, int y1,
-                  unsigned char r, unsigned char g, unsigned char b);
+    // Set a single pixel (z used for z-buffer test)
+    void setPixel(int x, int y, float z, unsigned char r, unsigned char g, unsigned char b);
 
-    // NEW: draw filled triangle with depth + shading
-    void drawTriangle(int x0,int y0,float z0,
-                      int x1,int y1,float z1,
-                      int x2,int y2,float z2,
-                      unsigned char r, unsigned char g, unsigned char b,
-                      float intensity);
+    // Draw a filled triangle with simple z-interpolation and flat brightness
+    void drawTriangle(
+        int x0,int y0,float z0,
+        int x1,int y1,float z1,
+        int x2,int y2,float z2,
+        unsigned char r,unsigned char g,unsigned char b,
+        float brightness
+    );
 
-    void present(const std::string &filename);
+    // Raw buffer bytes (ARGB32, little-endian: 0xAARRGGBB). Returned as byte pointer.
+    const unsigned char* getBuffer() const { return reinterpret_cast<const unsigned char*>(buffer); }
 
     int getWidth() const { return width; }
     int getHeight() const { return height; }
 
-    const unsigned char* getBuffer() const { return buffer; }
-
 private:
-    int width;
-    int height;
+    int width, height;
     std::vector<float> zbuffer;
-    unsigned char *buffer; // RGB triplets, row-major
+    uint32_t* buffer;  // ARGB32 pixel buffer (row-major)
 };

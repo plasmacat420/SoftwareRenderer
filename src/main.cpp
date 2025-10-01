@@ -1,3 +1,4 @@
+// src/main.cpp - Shape Shifter with extra high-graphic carrot shape (key 6)
 #include "Renderer.h"
 #include <SDL2/SDL.h>
 #include <vector>
@@ -76,21 +77,115 @@ static void makeHelix(std::vector<Vec3> &verts, std::vector<Tri> &tris, int N=10
     }
 }
 
-// --- Ent/Tree ---
+// --- Ent/Tree (simple leafy top) ---
 static void makeEnt(std::vector<Vec3> &verts, std::vector<Tri> &tris) {
     verts.clear(); tris.clear();
-    // A simple trunk + leafy top
     verts = {
         {0,-1,0}, {0.3f,0,0}, {-0.3f,0,0}, {0,0,0.3f}, {0,0,-0.3f},
         {0,1,0}, {0.6f,1.3f,0}, {-0.6f,1.3f,0}, {0,1.3f,0.6f}, {0,1.3f,-0.6f}
     };
     tris = {
-        {0,1,2,120,80,40},{0,2,3,120,80,40},{0,3,4,120,80,40},{0,4,1,120,80,40}, // trunk
-        {1,5,2,120,80,40},{2,5,3,120,80,40},{3,5,4,120,80,40},{4,5,1,120,80,40}, // trunk top
-        {5,6,7,30,120,30},{5,7,8,30,120,30},{5,8,9,30,120,30},{5,9,6,30,120,30}  // leafy top
+        {0,1,2,120,80,40},{0,2,3,120,80,40},{0,3,4,120,80,40},{0,4,1,120,80,40},
+        {1,5,2,120,80,40},{2,5,3,120,80,40},{3,5,4,120,80,40},{4,5,1,120,80,40},
+        {5,6,7,30,120,30},{5,7,8,30,120,30},{5,8,9,30,120,30},{5,9,6,30,120,30}
     };
 }
 
+// --- Carrot (high-graphic) generator ---
+static void makeCarrot(std::vector<Vec3> &verts, std::vector<Tri> &tris) {
+    verts.clear(); tris.clear();
+    srand(424242); // deterministic
+
+    const int segments = 28;   // around - fairly smooth
+    const int rings = 18;      // along height
+    const float baseY = -1.0f;
+    const float topY  = 0.9f;
+
+    std::vector<int> ringStart;
+    ringStart.reserve(rings);
+
+    for (int ri = 0; ri < rings; ++ri) {
+        float t = (float)ri / (rings - 1);           // 0..1
+        float y = baseY + t * (topY - baseY);
+        // radius: large at base, small at top; add ridge noise
+        float ridge = 0.06f * sinf(t * 18.0f + 0.5f * ((rand()%100)/100.0f));
+        float radius = (1.0f - powf(t, 1.6f)) * 0.45f + ridge;
+        // slight twist so it looks organic
+        float twist = t * 2.0f * PI * 0.18f;
+
+        int start = (int)verts.size();
+        ringStart.push_back(start);
+
+        for (int s = 0; s < segments; ++s) {
+            float a = (float)s / segments * 2.0f * PI + twist;
+            float x = cosf(a) * radius;
+            float z = sinf(a) * radius;
+            float wob = 0.02f * sinf(t * 10.0f + s * 0.5f);
+            verts.push_back({ x + wob * cosf(a*2.3f), y + 0.01f * sinf(a*3.1f), z + wob * sinf(a*1.7f) });
+        }
+    }
+
+    for (int ri = 1; ri < rings; ++ri) {
+        int prev = ringStart[ri-1];
+        int cur  = ringStart[ri];
+        for (int s = 0; s < segments; ++s) {
+            int a0 = prev + s;
+            int a1 = prev + ((s+1) % segments);
+            int b0 = cur  + s;
+            int b1 = cur  + ((s+1) % segments);
+            tris.push_back({ a0, a1, b1, 220,100,30 });
+            tris.push_back({ a0, b1, b0, 200,90,20 });
+        }
+    }
+
+    // tip
+    Vec3 tipPos = { 0.0f, topY + 0.06f, 0.0f };
+    int tipIndex = (int)verts.size();
+    verts.push_back(tipPos);
+
+    int lastStart = ringStart.back();
+    for (int s = 0; s < segments; ++s) {
+        int v0 = lastStart + s;
+        int v1 = lastStart + ((s+1) % segments);
+        tris.push_back({ v0, v1, tipIndex, 230,110,40 });
+    }
+
+    // leafy tuft
+    int leafCenter = (int)verts.size();
+    verts.push_back({ 0.0f, topY + 0.10f, 0.0f }); // leaf center
+
+    int leafCount = 8;
+    for (int i = 0; i < leafCount; ++i) {
+        float a = (float)i / leafCount * 2.0f * PI;
+        float lx = cosf(a) * 0.20f;
+        float lz = sinf(a) * 0.20f;
+        float ly = topY + 0.10f + 0.03f * cosf(a*2.0f);
+        int leafOuter = (int)verts.size();
+        verts.push_back({ lx * 0.6f, ly - 0.03f, lz * 0.6f });
+        int leafTip = (int)verts.size();
+        verts.push_back({ lx * 1.1f, ly + 0.02f, lz * 1.1f });
+        unsigned char gr = (unsigned char)(30 + (rand()%60));   // 30..89
+        unsigned char gg = (unsigned char)(110 + (rand()%80));  // 110..189
+        unsigned char gb = (unsigned char)(20 + (rand()%40));
+        tris.push_back({ leafCenter, leafOuter, leafTip, gr, gg, gb });
+    }
+
+    // freckles / small details at lower half
+    for (int f = 0; f < 12; ++f) {
+        float ty = baseY + ((float)rand()/RAND_MAX) * (topY - baseY) * 0.45f;
+        float ta = ((float)rand()/RAND_MAX) * 2.0f * PI;
+        float tr = 0.02f + ((float)rand()/RAND_MAX) * 0.03f;
+        Vec3 p0 = { cosf(ta)*tr*0.3f, ty, sinf(ta)*tr*0.3f };
+        Vec3 p1 = { cosf(ta+0.3f)*tr, ty+0.01f, sinf(ta+0.3f)*tr };
+        Vec3 p2 = { cosf(ta-0.3f)*tr, ty-0.01f, sinf(ta-0.3f)*tr };
+        int i0 = (int)verts.size(); verts.push_back(p0);
+        int i1 = (int)verts.size(); verts.push_back(p1);
+        int i2 = (int)verts.size(); verts.push_back(p2);
+        tris.push_back({ i0, i1, i2, 160,70,30 });
+    }
+}
+
+// --- main ---
 int main(int argc, char** argv) {
     (void)argc; (void)argv;
     int W=800, H=600;
@@ -107,19 +202,23 @@ int main(int argc, char** argv) {
 
     std::vector<Vec3> verts; std::vector<Tri> tris;
     auto loadShape=[&](int idx){
-        switch(idx%5){
+        switch(idx%6){ // now 6 shapes: 0..5
             case 0: makeCube(verts,tris); break;
             case 1: makeTetrahedron(verts,tris); break;
             case 2: makeIcosahedron(verts,tris); break;
             case 3: makeHelix(verts,tris); break;
             case 4: makeEnt(verts,tris); break;
+            case 5: makeCarrot(verts,tris); break;
         }
     };
     int shapeIndex=0; loadShape(shapeIndex);
 
     float cameraZ=3.5f, fov=90.0f;
     float scale=(1.0f/tanf((fov*0.5f)*PI/180.0f))*(W/2.0f);
-    Vec3 lightDir={-1,0,-0.5f};
+    // Vec3 lightDir={-1,1.0f,-0.5f};
+    // Vec3 lightDir = {1, 0.7f, 0.7f};
+    float t = SDL_GetTicks() * 0.001f; // seconds
+    Vec3 lightDir = {cosf(t)*1, 0.7f, sinf(t)*0.7f};
     float len=sqrtf(lightDir.x*lightDir.x+lightDir.y*lightDir.y+lightDir.z*lightDir.z);
     lightDir.x/=len; lightDir.y/=len; lightDir.z/=len;
 
@@ -134,7 +233,8 @@ int main(int argc, char** argv) {
                     case SDLK_2: loadShape(shapeIndex=1); break;
                     case SDLK_3: loadShape(shapeIndex=2); break;
                     case SDLK_4: loadShape(shapeIndex=3); break;
-                    case SDLK_5: loadShape(shapeIndex=4); break;
+                    case SDLK_5: loadShape(shapeIndex=4); break; // Ent
+                    case SDLK_6: loadShape(shapeIndex=5); break; // Carrot
                 }
             }
         }
@@ -164,10 +264,20 @@ int main(int argc, char** argv) {
             renderer.drawTriangle((int)a.x,(int)a.y,a.z,(int)b.x,(int)b.y,b.z,(int)c.x,(int)c.y,c.z,t.r,t.g,t.b,brightness);
         }
 
-        SDL_LockSurface(surface);
-        memcpy(surface->pixels, renderer.getBuffer(), W*H*4);
-        SDL_UnlockSurface(surface);
-        SDL_UpdateWindowSurface(win);
+        // copy ARGB32 buffer exactly (W*H*4)
+        if (SDL_LockSurface(surface) == 0) {
+            unsigned char *dst = (unsigned char*)surface->pixels;
+            const unsigned char *src = renderer.getBuffer();
+            int dstPitch = surface->pitch;
+            int rowBytes = W * 4;
+            int copyBytes = (rowBytes <= dstPitch) ? rowBytes : dstPitch;
+            for (int y=0; y<H; ++y) {
+                memcpy(dst + y * dstPitch, src + y * rowBytes, copyBytes);
+            }
+            SDL_UnlockSurface(surface);
+            SDL_UpdateWindowSurface(win);
+        }
+
         SDL_Delay(16);
     }
     SDL_DestroyWindow(win); SDL_Quit(); return 0;
